@@ -2,9 +2,9 @@ import streamlit as st
 from PyPDF2 import PdfReader
 from docx import Document
 from fpdf import FPDF
-import pandas as pd
+import io
 
-# 1. Page Config & Professional Theme
+# 1. Page & Theme Config
 st.set_page_config(page_title="Report-Check.ai", layout="wide")
 
 st.markdown("""
@@ -12,133 +12,132 @@ st.markdown("""
     .stApp { background-color: #0b101a; color: white; }
     .suggestion-card { background: rgba(255, 165, 0, 0.1); padding: 20px; border-radius: 12px; border-left: 6px solid #ffa500; margin-bottom: 15px; }
     .success-card { background: rgba(0, 255, 128, 0.1); padding: 20px; border-radius: 12px; border-left: 6px solid #00ff80; margin-bottom: 15px; }
-    .metric-container { background: rgba(56, 189, 248, 0.05); border: 1px solid #38bdf8; border-radius: 15px; padding: 20px; }
+    .metric-box { background: rgba(56, 189, 248, 0.1); border: 1px solid #38bdf8; border-radius: 15px; padding: 20px; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Logic: Analysis Engine ---
-def analyze_report(text):
+# --- Analysis & Logic ---
+def get_analysis(text):
     text = text.lower()
-    # Sections to scan
+    # Sections and their specific advice
     criteria = {
-        "Executive Summary": ["executive summary", "overview", "introduction"],
-        "Methodology": ["methodology", "testing approach", "reconnaissance"],
-        "Technical Findings": ["findings", "vulnerabilities", "results"],
-        "Remediation": ["remediation", "mitigation", "recommendations"]
+        "Executive Summary": {
+            "keywords": ["executive summary", "overview", "introduction"],
+            "advice": "Student ko kahein ke report ke shuru mein 'Executive Summary' likhen jo non-technical logon ko project ka maqsad samjhaye."
+        },
+        "Methodology": {
+            "keywords": ["methodology", "testing approach", "reconnaissance", "scanning"],
+            "advice": "Ismein testing ke steps (jaise Nmap scan, manual testing) aur tools ka zikr hona lazmi hai."
+        },
+        "Technical Findings": {
+            "keywords": ["findings", "vulnerabilities", "results", "proof of concept"],
+            "advice": "Har vulnerability ke saath uska Proof of Concept (Screenshot) aur description shamil karein."
+        },
+        "Remediation": {
+            "keywords": ["remediation", "mitigation", "recommendations", "solution"],
+            "advice": "Sirf ghalti batana kafi nahi, developer ko theek karne ka tareeka (Solution) bhi batana zaruri hai."
+        }
     }
     
-    analysis = {}
+    results = {}
     score = 0
-    for section, keywords in criteria.items():
-        found = any(k in text for k in keywords)
-        analysis[section] = found
+    for section, data in criteria.items():
+        found = any(k in text for k in data["keywords"])
+        results[section] = {"found": found, "advice": data["advice"]}
         if found: score += 25
         
-    # Security vulnerability scanning
-    vulns_list = ["sql injection", "xss", "rce", "idor", "brute force", "lfi"]
+    vulns_list = ["sql injection", "xss", "rce", "idor", "brute force"]
     detected_vulns = [v.upper() for v in vulns_list if v in text]
     
-    return score, analysis, detected_vulns
+    return score, results, detected_vulns
 
-# --- Logic: PDF Generator ---
-def create_pdf_report(score, analysis, filename, vulns):
+# --- PDF Generation (With Detailed Summary) ---
+def generate_pdf_report(score, results, vulns, filename):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 15, "Report-Check.ai: Professional Audit Result", ln=True, align='C')
+    pdf.set_font("Arial", 'B', 18)
+    pdf.cell(200, 15, "Report-Check.ai | Pentest Audit Summary", ln=True, align='C')
     pdf.ln(10)
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, f"Analyzed Report: {filename}", ln=True)
-    pdf.cell(200, 10, f"Overall Perfection Score: {score}%", ln=True)
-    pdf.ln(5)
+    
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, "Structure Analysis:", ln=True)
-    pdf.set_font("Arial", size=12)
-    for sec, status in analysis.items():
-        res = "✓ Detected" if status else "X Missing"
-        pdf.cell(200, 10, f"- {sec}: {res}", ln=True)
+    pdf.cell(100, 10, f"File Name: {filename}", ln=True)
+    pdf.cell(100, 10, f"Total Score: {score}%", ln=True)
     pdf.ln(5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, f"Critical Vulnerabilities Identified: {len(vulns)}", ln=True)
+    
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, "1. Structure Audit & Suggestions:", ln=True)
+    pdf.set_font("Arial", size=11)
+    for sec, data in results.items():
+        status = "PASSED" if data['found'] else "FAILED"
+        pdf.set_text_color(0, 128, 0) if data['found'] else pdf.set_text_color(255, 0, 0)
+        pdf.cell(200, 8, f"- {sec}: {status}", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        if not data['found']:
+            pdf.set_font("Arial", 'I', 10)
+            pdf.multi_cell(0, 7, f"   Suggestion: {data['advice']}")
+            pdf.set_font("Arial", size=11)
+    
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, "2. Security Findings:", ln=True)
+    pdf.set_font("Arial", size=11)
+    pdf.cell(200, 8, f"Vulnerabilities Detected: {', '.join(vulns) if vulns else 'None'}", ln=True)
+    
     return pdf.output(dest='S').encode('latin-1')
 
 # --- UI Interface ---
-st.title("🛡️ Report-Check.ai (Ultimate Edition)")
-st.write("Analyze Pentest Reports: PDF, DOCX, & TXT supported.")
+st.title("🛡️ Report-Check.ai Pro")
+st.write("Scan Reports & Generate Professional Results for Teachers")
 
-uploaded_file = st.file_uploader("Drop the Pentest Report Here", type=['pdf', 'docx', 'txt'])
+file = st.file_uploader("Upload Student Report", type=['pdf', 'docx', 'txt'])
 
-if uploaded_file:
-    with st.spinner('🔍 AI Engine scanning report structure...'):
-        # Text Extraction
-        text = ""
-        try:
-            if uploaded_file.name.endswith('.pdf'):
-                reader = PdfReader(uploaded_file)
-                for page in reader.pages: text += page.extract_text()
-            elif uploaded_file.name.endswith('.docx'):
-                doc = Document(uploaded_file)
-                text = "\n".join([p.text for p in doc.paragraphs])
+if file:
+    # Extraction
+    text = ""
+    if file.name.endswith('.pdf'):
+        reader = PdfReader(file); text = "".join([p.extract_text() for p in reader.pages])
+    elif file.name.endswith('.docx'):
+        doc = Document(file); text = "\n".join([p.text for p in doc.paragraphs])
+    else:
+        text = file.read().decode("utf-8", errors="ignore")
+
+    score, analysis, vulns = get_analysis(text)
+    
+    # 1. Metrics Dashboard
+    st.divider()
+    c1, c2, c3 = st.columns(3)
+    with c1: st.metric("Overall Score", f"{score}%")
+    with c2: st.metric("Vulnerabilities", len(vulns))
+    with c3:
+        status = "✅ Ready" if score > 75 else "❌ Needs Work"
+        st.subheader(status)
+    
+    st.progress(score / 100)
+
+    # 2. Results & Detailed Suggestions Tabs
+    tab1, tab2 = st.tabs(["📋 Detailed Analysis", "📥 Download PDF Result"])
+
+    with tab1:
+        st.subheader("Structure Audit & Smart Suggestions")
+        for sec, data in analysis.items():
+            if data['found']:
+                st.markdown(f"<div class='success-card'>✅ <b>{sec}</b> is present. Structure is good.</div>", unsafe_allow_html=True)
             else:
-                text = uploaded_file.read().decode("utf-8", errors="ignore")
-        except Exception as e:
-            st.error(f"File reading error: {e}")
+                st.markdown(f"""<div class='suggestion-card'>
+                <b>❌ Missing: {sec}</b><br>
+                <b>How to fix:</b> {data['advice']}
+                </div>""", unsafe_allow_html=True)
+        
+        st.subheader("Summary Report")
+        st.write(f"Is report mein total **{len(vulns)}** bugs mile hain. Overall quality **{score}%** hai.")
 
-        if text:
-            score, analysis_results, found_vulns = analyze_report(text)
-            
-            # 1. Visual Metrics (Like the Picture)
-            st.divider()
-            m1, m2, m3 = st.columns(3)
-            with m1:
-                st.markdown("<div class='metric-container'>", unsafe_allow_html=True)
-                st.metric("Report Grade", f"{score}%")
-                st.markdown("</div>", unsafe_allow_html=True)
-            with m2:
-                st.markdown("<div class='metric-container'>", unsafe_allow_html=True)
-                count = sum(analysis_results.values())
-                st.metric("Sections Detected", f"{count}/4")
-                st.markdown("</div>", unsafe_allow_html=True)
-            with m3:
-                st.markdown("<div class='metric-container'>", unsafe_allow_html=True)
-                st.metric("Critical Vulns Found", len(found_vulns))
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            st.progress(score / 100)
-
-            # 2. Advanced Tabs
-            t1, t2, t3 = st.tabs(["📋 Analysis & Scoring", "💡 Improvements", "📥 Download Record"])
-
-            with t1:
-                st.subheader("Structure Audit")
-                for section, status in analysis_results.items():
-                    if status:
-                        st.success(f"✅ **{section}**: Properly Documented")
-                    else:
-                        st.error(f"❌ **{s}**: This section is missing!")
-                
-                if found_vulns:
-                    st.subheader("Identified Vulnerabilities")
-                    st.info(", ".join(found_vulns))
-
-            with t2:
-                st.subheader("Expert Feedback & Suggestions")
-                for section, status in analysis_results.items():
-                    if not status:
-                        st.markdown(f"""<div class='suggestion-card'>
-                        <b>⚠️ Fix Needed: {section}</b><br>
-                        Student ko kahein ke report mein '{section}' ka section shamil karein. Ismein screenshots aur step-by-step methodology honi chahiye taake teacher ko samajh aa sake.
-                        </div>""", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<div class='success-card'>✅ <b>{section}</b> is perfect. No changes needed.</div>", unsafe_allow_html=True)
-
-            with t3:
-                st.write("### Generate Professional Result")
-                st.write("Teacher can download this analysis as a PDF for grading records.")
-                pdf_bytes = create_pdf_report(score, analysis_results, uploaded_file.name, found_vulns)
-                st.download_button(
-                    label="📥 Download Result PDF",
-                    data=pdf_bytes,
-                    file_name=f"Result_{uploaded_file.name}.pdf",
-                    mime="application/pdf"
-                )
+    with tab2:
+        st.write("### Generate & Save Final Report")
+        st.info("Teacher is button par click kar ke poora result PDF form mein save kar sakti hain.")
+        pdf_file = generate_pdf_report(score, analysis, vulns, file.name)
+        st.download_button(
+            label="📄 Download Result as PDF",
+            data=pdf_file,
+            file_name=f"Result_{file.name}.pdf",
+            mime="application/pdf"
+        )
