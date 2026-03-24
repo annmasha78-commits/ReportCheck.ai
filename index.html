@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Report-Check | Pentest Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .glass { 
+            background: rgba(255, 255, 255, 0.05); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 24px; padding: 40px; 
+        }
+        .btn-check-ai { 
+            background: #38bdf8; color: #0f172a; font-weight: bold; border-radius: 12px;
+            transition: 0.3s; border: none; padding: 12px;
+        }
+        .btn-check-ai:hover { background: #7dd3fc; box-shadow: 0 0 20px rgba(56, 189, 248, 0.5); }
+        .score-circle { 
+            width: 100px; height: 100px; border-radius: 50%; border: 5px solid #38bdf8;
+            display: flex; align-items: center; justify-content: center; font-size: 24px; margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 glass text-center">
+                <h1 class="mb-4">Report-Check<span class="text-info">.ai</span></h1>
+                <p class="text-secondary mb-5">Teacher's Assistant for Pentest Report Grading</p>
+
+                <form action="/analyze" method="post" enctype="multipart/form-data">
+                    <input type="file" name="file" class="form-control mb-3 bg-transparent text-white border-secondary">
+                    <button type="submit" class="btn btn-check-ai w-100">START ANALYSIS</button>
+                </form>
+
+                {% if results %}
+                <div class="mt-5 p-4 bg-dark rounded-4 text-start">
+                    <div class="score-circle mb-3">{{ results.score }}%</div>
+                    <h4 class="text-center mb-4">Status: {{ results.status }}</h4>
+                    
+                    <p><strong>Detected Bugs:</strong> 
+                        {% for v in results.found_vulns %}<span class="badge bg-info text-dark me-1">{{ v }}</span>{% endfor %}
+                    </p>
+                    
+                    <p class="text-warning"><strong>Missing Points:</strong></p>
+                    <ul>
+                        {% for m in results.missing_sections %}<li>{{ m }}</li>{% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
