@@ -1,3 +1,6 @@
-flask
-gunicorn
 streamlit
+pandas
+PyPDF2
+python-docx
+pytesseract
+pillow
