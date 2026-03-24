@@ -27,17 +27,29 @@ st.markdown("""
 def get_analysis_results(text):
     text = text.lower()
     criteria = {
-        "Executive Summary": ["executive summary", "overview", "introduction"],
-        "Methodology": ["methodology", "testing approach", "reconnaissance"],
-        "Technical Findings": ["findings", "vulnerabilities", "results"],
-        "Remediation": ["remediation", "mitigation", "recommendations"]
+        "Executive Summary": {
+            "keywords": ["executive summary", "overview", "introduction"],
+            "advice": "Summary add karein jo project ka maqsad aur high-level results bataye."
+        },
+        "Methodology": {
+            "keywords": ["methodology", "testing approach", "reconnaissance", "scanning"],
+            "advice": "Testing ke steps aur tools (Nmap, Burp Suite) ka zikr hona lazmi hai."
+        },
+        "Technical Findings": {
+            "keywords": ["findings", "vulnerabilities", "results", "proof of concept"],
+            "advice": "Har vulnerability ke saath screenshots aur technical details shamil karein."
+        },
+        "Remediation": {
+            "keywords": ["remediation", "mitigation", "recommendations", "solution"],
+            "advice": "Bugs ko theek karne ke liye proper 'Solution' ya 'Remediation' steps likhen."
+        }
     }
     
     results = {}
     score = 0
-    for section, keywords in criteria.items():
-        found = any(k in text for k in keywords)
-        results[section] = found
+    for section, data in criteria.items():
+        found = any(k in text for k in data["keywords"])
+        results[section] = {"found": found, "advice": data["advice"]}
         if found: score += 25
         
     vulns = [v.upper() for v in ["sql injection", "xss", "rce", "idor", "brute force"] if v in text]
@@ -51,21 +63,54 @@ def create_pdf(score, results, vulns, filename):
     pdf.cell(200, 15, "Report-Check.ai Audit Result", ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, f"File Name: {filename}", ln=True)
-    pdf.cell(200, 10, f"Score: {score}%", ln=True)
+    pdf.cell(200, 10, f"Student File: {filename}", ln=True)
+    pdf.cell(200, 10, f"Overall Grade: {score}%", ln=True)
     pdf.ln(5)
-    pdf.cell(200, 10, "Structure Audit:", ln=True)
-    for sec, status in results.items():
-        res = "Present" if status else "Missing"
-        pdf.cell(200, 8, f"- {sec}: {res}", ln=True)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, "Structure Audit & Feedback:", ln=True)
+    pdf.set_font("Arial", size=11)
+    for sec, data in results.items():
+        status = "PASSED" if data['found'] else "MISSING"
+        pdf.cell(200, 8, f"- {sec}: {status}", ln=True)
+        if not data['found']:
+            pdf.cell(200, 6, f"  Suggestion: {data['advice']}", ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
 # 5. UI Layout
 st.title("🛡️ Report-Check.ai (Batch Pro)")
-st.write("Ek waqt mein 10 reports tak upload karein aur result check karein.")
+st.write("Ek waqt mein 10 reports tak upload karein. Har report ka alag score aur suggestion milay ga.")
 
-# Multi-file uploader added
 uploaded_files = st.file_uploader("Upload Student Reports", type=['pdf', 'docx', 'txt'], accept_multiple_files=True)
 
 if uploaded_files:
-    if len
+    # Check if files are more than 10
+    files_to_process = uploaded_files[:10]
+    if len(uploaded_files) > 10:
+        st.warning("⚠️ Sirf pehli 10 reports process ki ja rahi hain.")
+
+    for uploaded_file in files_to_process:
+        with st.container():
+            st.markdown(f"<div class='report-box'>", unsafe_allow_html=True)
+            st.subheader(f"📄 Report: {uploaded_file.name}")
+            
+            # Text Extraction
+            content = ""
+            try:
+                if uploaded_file.name.endswith('.pdf'):
+                    reader = PdfReader(uploaded_file)
+                    content = "".join([page.extract_text() for page in reader.pages])
+                elif uploaded_file.name.endswith('.docx'):
+                    doc = Document(uploaded_file)
+                    content = "\n".join([p.text for p in doc.paragraphs])
+                else:
+                    content = uploaded_file.read().decode("utf-8", errors="ignore")
+            except Exception as e:
+                st.error(f"Error reading {uploaded_file.name}: {e}")
+
+            if content:
+                score, analysis, vulns = get_analysis_results(content)
+                
+                col1, col2 = st.columns([1, 2])
+                
+                with col1:
+                    st.metric("Final Score",
