@@ -6,109 +6,90 @@ import matplotlib.pyplot as plt
 import re
 import io
 
-# Page Configuration
+# Page Config
 st.set_page_config(page_title="Report-Check.ai Pro", page_icon="🛡️", layout="wide")
 
-# Futuristic Dark Theme CSS
+# Dark Futuristic UI
 st.markdown("""
     <style>
-    .stApp { background-color: #0b0e14; color: #ffffff; }
-    .report-card { background: #161b22; padding: 20px; border-radius: 15px; border: 1px solid #30363d; margin-bottom: 15px; }
-    .stMetric { background: rgba(56, 189, 248, 0.05); padding: 15px; border-radius: 10px; border: 1px solid #1d4ed8; }
+    .stApp { background-color: #0d1117; color: #ffffff; }
+    .stMetric { background: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; }
+    .success-box { padding: 10px; background-color: #064e3b; border-radius: 5px; margin: 5px 0; }
+    .error-box { padding: 10px; background-color: #7f1d1d; border-radius: 5px; margin: 5px 0; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Enhanced Extraction Function ---
 def extract_text(file):
-    fname = file.name.lower()
     text = ""
     try:
-        if fname.endswith('.pdf'):
+        if file.name.lower().endswith('.pdf'):
             pdf = PdfReader(file)
             for page in pdf.pages:
                 content = page.extract_text()
-                if content: text += content
-        elif fname.endswith('.docx'):
+                if content: text += content + " "
+        elif file.name.lower().endswith('.docx'):
             doc = Document(file)
             text = "\n".join([p.text for p in doc.paragraphs])
-        elif fname.endswith('.txt'):
+        else:
             text = file.read().decode("utf-8")
-        return text
+        return text.replace('\x00', '') # Remove null bytes
     except Exception as e:
-        return f"ERROR: {str(e)}"
+        return f"Error: {str(e)}"
 
-# --- SMART Analysis Engine ---
-def analyze_content(text):
-    text_lower = text.lower()
+def analyze_logic(text):
+    t = text.lower()
     
-    # Smart Mapping (Jo aapki report ke titles ko handle karega)
-    criteria = {
-        "Executive Summary": ["executive summary", "overview", "introduction", "summary"],
-        "Methodology": ["methodology", "scope", "engagement", "testing approach", "tools"],
-        "Technical Findings": ["findings", "vulnerabilities", "technical analysis", "risk assessment"],
-        "Remediation": ["remediation", "recommendations", "mitigation", "strategic recommendations", "fixes"]
+    # Boht zyada flexible keywords taake koi bhi report miss na ho
+    checks = {
+        "Executive Summary": ["executive", "summary", "overview", "introduction"],
+        "Methodology": ["methodology", "scope", "approach", "tools", "engagement", "testing"],
+        "Technical Findings": ["findings", "vulnerabilities", "technical", "analysis", "results", "assessment"],
+        "Remediation": ["remediation", "recommendations", "mitigation", "strategic", "fixes", "solutions"]
     }
     
-    found_sections = [name for name, keys in criteria.items() if any(k in text_lower for k in keys)]
-    score = len(found_sections) * 25
+    found = []
+    for section, keywords in checks.items():
+        # Agar koi bhi keyword text mein kahin bhi mil jaye
+        if any(re.search(rf"\b{k}\b", t) for k in keywords) or any(k in t for k in keywords):
+            found.append(section)
+            
+    score = len(found) * 25
     
-    # Vulnerability Keywords
-    vuln_tags = ["sql injection", "xss", "rce", "idor", "pii leak", "api bypass", "brute force", "exposure"]
-    detected_vulns = [v.upper() for v in vuln_tags if v in text_lower]
+    # Vuln Keywords
+    vuln_list = ["sql", "xss", "rce", "idor", "leak", "bypass", "broken", "exposure"]
+    detected = [v.upper() for v in vuln_list if v in t]
     
-    return score, found_sections, list(criteria.keys()), detected_vulns
+    return score, found, list(checks.keys()), list(set(detected))
 
-# --- Main Interface ---
-st.title("🛡️ Report-Check.ai (Pro Suite)")
-st.write("Professional Pentesting Report Analyzer & Leaderboard")
-
-tab1, tab2 = st.tabs(["🔍 Single Report Deep-Dive", "🏆 Multi-Report Leaderboard (25 Files)"])
+st.title("🛡️ Report-Check.ai (Stable Engine)")
+tab1, tab2 = st.tabs(["🔍 Analyzer", "🏆 Leaderboard"])
 
 with tab1:
-    st.subheader("Individual Report Analysis")
-    up_file = st.file_uploader("Upload Report (PDF/DOCX/TXT)", type=['pdf', 'docx', 'txt'], key="single_up")
-    
-    if up_file:
-        with st.spinner('Analyzing...'):
-            raw_text = extract_text(up_file)
-            if raw_text:
-                score, found, all_sec, vulns = analyze_content(raw_text)
-                
-                # Dashboard
-                c1, c2, c3 = st.columns(3)
-                with c1: st.metric("Overall Score", f"{score}%")
-                with c2: st.metric("Critical Findings", len(vulns))
-                with c3: st.metric("Structure Health", f"{len(found)}/4")
-                
-                st.divider()
-                
-                col_left, col_right = st.columns(2)
-                with col_left:
-                    st.write("### 📋 Section Audit")
-                    for s in all_sec:
-                        if s in found: st.success(f"✅ **{s}**: Found in report")
-                        else: st.error(f"❌ **{s}**: Missing or not labeled correctly")
-                
-                with col_right:
-                    st.write("### 🚀 Improvement Guide")
-                    if score == 100:
-                        st.balloons()
-                        st.success("Report is perfect and ready for submission!")
-                    else:
-                        st.warning("Professional report ke liye missing sections add karein.")
-                
-                # Image Download Section
-                st.write("### 📥 Export Result")
-                fig, ax = plt.subplots(figsize=(6, 3))
-                ax.barh(all_sec, [1 if s in found else 0.1 for s in all_sec], color=['#22c55e' if s in found else '#ef4444' for s in all_sec])
-                plt.title("Report Quality Blueprint")
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png', bbox_inches='tight')
-                st.download_button("Download Analysis Image (PNG)", buf.getvalue(), "report_analysis.png", "image/png")
+    f = st.file_uploader("Upload Report", type=['pdf', 'docx', 'txt'])
+    if f:
+        content = extract_text(f)
+        if content:
+            score, found, all_sec, vulns = analyze_logic(content)
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Score", f"{score}%")
+            c2.metric("Findings", len(vulns))
+            c3.metric("Status", "Passed" if score >= 75 else "Needs Work")
+            
+            st.divider()
+            st.subheader("Audit Results")
+            for s in all_sec:
+                if s in found:
+                    st.markdown(f'<div class="success-box">✅ <b>{s}</b>: Identified in Document</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="error-box">❌ <b>{s}</b>: Not Detected (Check Heading)</div>', unsafe_allow_html=True)
 
 with tab2:
-    st.subheader("25-File Comparison Leaderboard")
-    multi_files = st.file_uploader("Upload up to 25 Reports", accept_multiple_files=True, type=['pdf', 'docx', 'txt'])
-    
-    if multi_files:
-        data = []
+    m_files = st.file_uploader("Bulk Upload (Max 25)", accept_multiple_files=True, type=['pdf', 'docx', 'txt'])
+    if m_files:
+        res = []
+        for file in m_files[:25]:
+            txt = extract_text(file)
+            s, _, _, _ = analyze_logic(txt)
+            res.append({"File": file.name, "Score": f"{s}%"})
+        st.table(pd.DataFrame(res).sort_values("Score", ascending=False))
