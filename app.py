@@ -2,23 +2,23 @@ import streamlit as st
 import pandas as pd
 from PyPDF2 import PdfReader
 from docx import Document
-from PIL import Image
 import matplotlib.pyplot as plt
 import re
 import io
 
-# Page Config
-st.set_page_config(page_title="Report-Check.ai Pro", layout="wide")
+# Page Configuration
+st.set_page_config(page_title="Report-Check.ai Pro", page_icon="🛡️", layout="wide")
 
-# Professional Dark UI
+# Futuristic Dark Theme CSS
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    .report-card { background: #1e293b; padding: 20px; border-radius: 15px; border: 1px solid #38bdf8; }
+    .stApp { background-color: #0b0e14; color: #ffffff; }
+    .report-card { background: #161b22; padding: 20px; border-radius: 15px; border: 1px solid #30363d; margin-bottom: 15px; }
+    .stMetric { background: rgba(56, 189, 248, 0.05); padding: 15px; border-radius: 10px; border: 1px solid #1d4ed8; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SMART Extraction Function ---
+# --- Enhanced Extraction Function ---
 def extract_text(file):
     fname = file.name.lower()
     text = ""
@@ -26,99 +26,89 @@ def extract_text(file):
         if fname.endswith('.pdf'):
             pdf = PdfReader(file)
             for page in pdf.pages:
-                text += page.extract_text() or ""
+                content = page.extract_text()
+                if content: text += content
         elif fname.endswith('.docx'):
             doc = Document(file)
             text = "\n".join([p.text for p in doc.paragraphs])
         elif fname.endswith('.txt'):
             text = file.read().decode("utf-8")
-        # Image support (OCR error handling)
-        elif fname.endswith(('.png', '.jpg', '.jpeg')):
-            try:
-                import pytesseract
-                text = pytesseract.image_to_string(Image.open(file))
-            except:
-                return "ERROR_OCR: Tesseract not installed on server."
         return text
     except Exception as e:
         return f"ERROR: {str(e)}"
 
-# --- ADVANCED Analysis Logic ---
+# --- SMART Analysis Engine ---
 def analyze_content(text):
     text_lower = text.lower()
     
-    # Smart Matching: Multiple keywords for each section
-    check_list = {
-        "Executive Summary": ["executive summary", "summary of findings", "high-level overview", "introduction"],
-        "Methodology": ["methodology", "scope", "engagement", "approach", "tools used"],
-        "Technical Findings": ["findings", "vulnerabilities", "risk assessment", "technical analysis", "attack verification"],
-        "Remediation": ["remediation", "recommendations", "mitigation", "strategic recommendations", "short-term fixes"]
+    # Smart Mapping (Jo aapki report ke titles ko handle karega)
+    criteria = {
+        "Executive Summary": ["executive summary", "overview", "introduction", "summary"],
+        "Methodology": ["methodology", "scope", "engagement", "testing approach", "tools"],
+        "Technical Findings": ["findings", "vulnerabilities", "technical analysis", "risk assessment"],
+        "Remediation": ["remediation", "recommendations", "mitigation", "strategic recommendations", "fixes"]
     }
     
-    found_sections = []
-    for section, keywords in check_list.items():
-        if any(k in text_lower for k in keywords):
-            found_sections.append(section)
-    
+    found_sections = [name for name, keys in criteria.items() if any(k in text_lower for k in keys)]
     score = len(found_sections) * 25
     
-    # Vulnerability Scanner
-    vulns_to_check = ["sql injection", "xss", "rce", "api leak", "pii leak", "broken access", "idor", "version exposure"]
-    detected_vulns = [v.upper() for v in vulns_to_check if v in text_lower]
+    # Vulnerability Keywords
+    vuln_tags = ["sql injection", "xss", "rce", "idor", "pii leak", "api bypass", "brute force", "exposure"]
+    detected_vulns = [v.upper() for v in vuln_tags if v in text_lower]
     
-    return score, found_sections, list(check_list.keys()), detected_vulns
+    return score, found_sections, list(criteria.keys()), detected_vulns
 
-# --- APP INTERFACE ---
-st.title("🛡️ Report-Check.ai (Pro Edition)")
-tab1, tab2 = st.tabs(["🔍 Single Deep Analysis", "🏆 25-File Leaderboard"])
+# --- Main Interface ---
+st.title("🛡️ Report-Check.ai (Pro Suite)")
+st.write("Professional Pentesting Report Analyzer & Leaderboard")
+
+tab1, tab2 = st.tabs(["🔍 Single Report Deep-Dive", "🏆 Multi-Report Leaderboard (25 Files)"])
 
 with tab1:
-    up_file = st.file_uploader("Upload Report (PDF, Word, Image)", type=['pdf', 'docx', 'txt', 'png', 'jpg'], key="single")
+    st.subheader("Individual Report Analysis")
+    up_file = st.file_uploader("Upload Report (PDF/DOCX/TXT)", type=['pdf', 'docx', 'txt'], key="single_up")
+    
     if up_file:
-        raw_text = extract_text(up_file)
-        if "ERROR_OCR" in raw_text:
-            st.warning("OCR (Image reading) is not active. Please upload PDF or Word for better results.")
-        elif raw_text:
-            score, found, all_sec, vulns = analyze_content(raw_text)
-            
-            # Layout
-            c1, c2 = st.columns([1, 1])
-            with c1:
-                st.metric("Report Score", f"{score}%")
-                st.write("### Structure Audit")
-                for s in all_sec:
-                    if s in found: st.success(f"✅ {s}: Found")
-                    else: st.error(f"❌ {s}: Missing or not clearly labeled")
-            
-            with c2:
-                st.write("### Security Findings")
-                if vulns: st.warning(f"Detected: {', '.join(vulns)}")
-                else: st.info("No critical keywords found.")
+        with st.spinner('Analyzing...'):
+            raw_text = extract_text(up_file)
+            if raw_text:
+                score, found, all_sec, vulns = analyze_content(raw_text)
                 
-                # Image Export Logic
-                fig, ax = plt.subplots(figsize=(5,2))
-                ax.barh(all_sec, [1 if s in found else 0 for s in all_sec], color='#38bdf8')
-                plt.title("Section Presence")
+                # Dashboard
+                c1, c2, c3 = st.columns(3)
+                with c1: st.metric("Overall Score", f"{score}%")
+                with c2: st.metric("Critical Findings", len(vulns))
+                with c3: st.metric("Structure Health", f"{len(found)}/4")
+                
+                st.divider()
+                
+                col_left, col_right = st.columns(2)
+                with col_left:
+                    st.write("### 📋 Section Audit")
+                    for s in all_sec:
+                        if s in found: st.success(f"✅ **{s}**: Found in report")
+                        else: st.error(f"❌ **{s}**: Missing or not labeled correctly")
+                
+                with col_right:
+                    st.write("### 🚀 Improvement Guide")
+                    if score == 100:
+                        st.balloons()
+                        st.success("Report is perfect and ready for submission!")
+                    else:
+                        st.warning("Professional report ke liye missing sections add karein.")
+                
+                # Image Download Section
+                st.write("### 📥 Export Result")
+                fig, ax = plt.subplots(figsize=(6, 3))
+                ax.barh(all_sec, [1 if s in found else 0.1 for s in all_sec], color=['#22c55e' if s in found else '#ef4444' for s in all_sec])
+                plt.title("Report Quality Blueprint")
                 buf = io.BytesIO()
-                plt.savefig(buf, format='png')
-                st.download_button("📥 Download Analysis as Image", buf.getvalue(), "analysis.png", "image/png")
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                st.download_button("Download Analysis Image (PNG)", buf.getvalue(), "report_analysis.png", "image/png")
 
 with tab2:
-    multi_files = st.file_uploader("Upload up to 25 files for Comparison", accept_multiple_files=True, type=['pdf', 'docx', 'txt', 'png', 'jpg'])
+    st.subheader("25-File Comparison Leaderboard")
+    multi_files = st.file_uploader("Upload up to 25 Reports", accept_multiple_files=True, type=['pdf', 'docx', 'txt'])
+    
     if multi_files:
-        results = []
-        for f in multi_files[:25]:
-            t = extract_text(f)
-            s, _, _, _ = analyze_content(t)
-            results.append({"Filename": f.name, "Score": s})
-        
-        df = pd.DataFrame(results).sort_values(by="Score", ascending=False)
-        st.table(df)
-        
-        # Leaderboard Image Export
-        fig2, ax2 = plt.subplots()
-        df.plot(kind='bar', x='Filename', y='Score', ax=ax2, color='#38bdf8')
-        plt.tight_layout()
-        buf2 = io.BytesIO()
-        plt.savefig(buf2, format='png')
-        st.download_button("📥 Download Leaderboard Image", buf2.getvalue(), "leaderboard.png", "image/png")
+        data = []
