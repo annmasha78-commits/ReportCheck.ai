@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 from PyPDF2 import PdfReader
 from docx import Document
-from PIL import Image
-import pytesseract
+import io
 
 # Page Configuration
 st.set_page_config(page_title="Report-Check.ai", page_icon="🛡️", layout="wide")
@@ -18,26 +17,26 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛡️ Report-Check.ai (Ultimate Edition)")
-st.write("Analyze Pentest Reports: PDF, DOCX, TXT & Images supported.")
+st.title("🛡️ Report-Check.ai (Stable Edition)")
+st.write("Analyze Pentest Reports: PDF, DOCX, & TXT supported.")
 
-# --- Extraction Functions ---
+# --- Extraction Functions (Simplified - No OCR Error) ---
 def extract_text(file):
     fname = file.name.lower()
     text = ""
-    if fname.endswith('.txt'):
-        text = file.read().decode("utf-8")
-    elif fname.endswith('.pdf'):
-        pdf = PdfReader(file)
-        for page in pdf.pages:
-            text += page.extract_text()
-    elif fname.endswith('.docx'):
-        doc = Document(file)
-        text = "\n".join([p.text for p in doc.paragraphs])
-    elif fname.endswith(('.png', '.jpg', '.jpeg')):
-        img = Image.open(file)
-        text = pytesseract.image_to_string(img)
-    return text
+    try:
+        if fname.endswith('.txt'):
+            text = file.read().decode("utf-8")
+        elif fname.endswith('.pdf'):
+            pdf = PdfReader(file)
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        elif fname.endswith('.docx'):
+            doc = Document(file)
+            text = "\n".join([p.text for p in doc.paragraphs])
+        return text
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 # --- Analysis Engine ---
 def analyze_content(text):
@@ -58,14 +57,14 @@ def analyze_content(text):
     return score, found, list(criteria.keys()), detected_vulns
 
 # --- Main App Interface ---
-uploaded_file = st.file_uploader("Drop any report file (PDF, Word, TXT, Image)", type=['txt', 'pdf', 'docx', 'png', 'jpg', 'jpeg'])
+uploaded_file = st.file_uploader("Drop report file (PDF, Word, TXT)", type=['txt', 'pdf', 'docx'])
 
 if uploaded_file:
     with st.spinner('🚀 Deep Scanning Report...'):
         text_content = extract_text(uploaded_file)
         
-        if text_content.strip() == "":
-            st.error("Could not extract text. Make sure the file is not corrupted or empty.")
+        if not text_content or text_content.strip() == "" or "Error:" in text_content:
+            st.error("Text extract nahi ho saka. File check karein.")
         else:
             score, found_sections, all_sections, vulns = analyze_content(text_content)
             
@@ -99,10 +98,10 @@ if uploaded_file:
             with t2:
                 st.subheader("How to improve this report?")
                 if score < 100:
-                    st.warning("Aapki report mein kuch ahem sections missing hain. Professional report ke liye upar diye gaye Red sections ko add karen.")
+                    st.warning("Professional report ke liye missing sections add karein.")
                 else:
                     st.balloons()
-                    st.success("Perfect! Teacher ko bhejny ke liye report tayyar hai.")
+                    st.success("Perfect! Report tayyar hai.")
 
             with t3:
-                st.text_area("Original Content Preview", text_content[:2000] + "...", height=300)
+                st.text_area("Content Preview", text_content[:2000] + "...", height=300)
