@@ -2,19 +2,19 @@ import streamlit as st
 import pandas as pd
 from PyPDF2 import PdfReader
 from docx import Document
-import matplotlib.pyplot as plt
 import re
-import io
 
 # Page Config
 st.set_page_config(page_title="Report-Check.ai Pro", page_icon="🛡️", layout="wide")
 
-# UI Styling
+# Styling
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #ffffff; }
-    .success-box { padding: 15px; background-color: #064e3b; border-radius: 10px; margin: 10px 0; border-left: 5px solid #10b981; }
-    .error-box { padding: 15px; background-color: #7f1d1d; border-radius: 10px; margin: 10px 0; border-left: 5px solid #ef4444; }
+    .status-card { padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 6px solid; }
+    .prof { background-color: #064e3b; border-color: #10b981; }
+    .weak { background-color: #451a03; border-color: #f59e0b; }
+    .miss { background-color: #450a0a; border-color: #ef4444; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -37,57 +37,83 @@ def extract_text(file):
 
 def analyze_logic(text):
     t = text.lower()
+    
+    # Define Sections and what to look for inside them
     checks = {
-        "Executive Summary": ["executive", "summary", "overview", "introduction"],
-        "Methodology": ["methodology", "scope", "approach", "tools", "testing"],
-        "Technical Findings": ["findings", "vulnerabilities", "technical", "results"],
-        "Remediation": ["remediation", "recommendations", "mitigation", "fixes"]
+        "Executive Summary": {
+            "keywords": ["executive", "summary", "overview"],
+            "reqs": ["impact", "risk", "scope"],
+            "tip": "High-level impact aur risk level ka zikr zaroor karein."
+        },
+        "Methodology": {
+            "keywords": ["methodology", "approach", "tools", "nmap", "zap"],
+            "reqs": ["scanning", "enumeration", "tools"],
+            "tip": "Step-by-step process aur tools ki details missing hain."
+        },
+        "Technical Findings": {
+            "keywords": ["findings", "vulnerabilities", "assessment"],
+            "reqs": ["cvss", "severity", "poc", "proof"],
+            "tip": "Screenshots (PoC) aur CVSS scoring lazmi add karein."
+        },
+        "Remediation": {
+            "keywords": ["remediation", "recommendations", "fixes"],
+            "reqs": ["patch", "solution", "mitigation"],
+            "tip": "Sirf mashwara na dein, technical fix steps bhi likhein."
+        }
     }
     
-    found = []
-    for section, keywords in checks.items():
-        if any(k in t for k in keywords):
-            found.append(section)
-            
-    score = len(found) * 25
-    vuln_list = ["sql", "xss", "rce", "idor", "leak", "bypass", "broken", "exposure"]
-    detected = [v.upper() for v in vuln_list if v in t]
+    results = []
+    total_score = 0
     
-    return score, found, list(checks.keys()), list(set(detected))
-
-st.title("🛡️ Report-Check.ai (Stable Engine)")
-tab1, tab2 = st.tabs(["🔍 Analyzer", "🏆 Leaderboard"])
-
-with tab1:
-    f = st.file_uploader("Upload Report", type=['pdf', 'docx', 'txt'])
-    if f:
-        with st.spinner("Analyzing Report..."):
-            content = extract_text(f)
-            
-            # DEBUG: Agar text khali hai toh batao
-            if not content:
-                st.error("Document se koi text nahi mila. Kya ye scanned image hai?")
-            elif content.startswith("Error:"):
-                st.error(content)
+    for section, data in checks.items():
+        found_sec = any(k in t for k in data["keywords"])
+        missing_reqs = [r for r in data["reqs"] if r not in t]
+        
+        status = "miss"
+        score = 0
+        msg = "Section missing hai. Report incomplete lag rahi hai."
+        
+        if found_sec:
+            if not missing_reqs:
+                status = "prof"
+                score = 25
+                msg = "Zabardast! Section mukammal aur professional hai."
             else:
-                score, found, all_sec, vulns = analyze_logic(content)
-                
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Total Score", f"{score}%")
-                c2.metric("Findings", len(vulns))
-                c3.metric("Status", "Passed" if score >= 75 else "Needs Work")
-                
-                st.divider()
-                st.subheader("Audit Results")
-                for s in all_sec:
-                    if s in found:
-                        st.markdown(f'<div class="success-box">✅ <b>{s}</b>: Identified</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div class="error-box">❌ <b>{s}</b>: Not Detected</div>', unsafe_allow_html=True)
-                
-                if vulns:
-                    st.warning(f"Detected Vulnerability Keywords: {', '.join(vulns)}")
+                status = "weak"
+                score = 15
+                msg = f"Section mojud hai lekin {', '.join(missing_reqs).upper()} missing hai. {data['tip']}"
+        
+        total_score += score
+        results.append({"name": section, "status": status, "score": score, "msg": msg})
+        
+    return total_score, results
 
-with tab2:
-    st.info("Leaderboard is active. Upload multiple files to compare scores.")
-    # (Rest of your leaderboard code)
+st.title("🛡️ Report-Check.ai (Smart Engine)")
+
+f = st.file_uploader("Upload Pentesting Report", type=['pdf', 'docx', 'txt'])
+
+if f:
+    content = extract_text(f)
+    if content:
+        score, report_data = analyze_logic(content)
+        
+        # Summary Header
+        c1, c2 = st.columns([1, 2])
+        c1.metric("Audit Score", f"{score}%")
+        
+        if score >= 80: c2.success("Rating: A+ Professional Report")
+        elif score >= 50: c2.warning("Rating: B Needs Improvement")
+        else: c2.error("Rating: C Weak Structure")
+        
+        st.divider()
+        st.subheader("Detailed Breakdown (Kami aur Khobiyan)")
+        
+        for res in report_data:
+            st.markdown(f"""
+            <div class="status-card {res['status']}">
+                <h4>{res['name']} ({res['score']}/25)</h4>
+                <p>{res['msg']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.error("Document read nahi ho saka. File check karein.")
