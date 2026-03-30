@@ -2,7 +2,3 @@ streamlit
 pandas
 PyPDF2
 python-docx
-fpdf
-pillow
-matplotlib
-python-docx
